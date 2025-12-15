@@ -72,15 +72,54 @@ const crawler = new PlaywrightCrawler({
         log.info(`Processing ${request.url}`);
 
         // Wait for Cloudflare challenge to potentially pass
-        // Random wait to mimic human behavior if challenged
+        // Active interaction to trigger human checks
         try {
             await page.waitForLoadState('networkidle', { timeout: 30000 });
 
-            // basic check for cloudflare title
             const title = await page.title();
             if (title.includes('Just a moment') || title.includes('Attention Required')) {
-                log.warning('Cloudflare challenge detected. Waiting...');
-                await page.waitForTimeout(5000 + Math.random() * 5000);
+                log.warning('Cloudflare challenge detected. Initiating interaction...');
+
+                // Try up to 3 times to interact
+                for (let i = 0; i < 3; i++) {
+                    // 1. Mouse movements
+                    await page.mouse.move(100 + Math.random() * 200, 200 + Math.random() * 200);
+                    await page.waitForTimeout(1000 + Math.random() * 2000);
+
+                    // 2. Click if "bound" to a specific location (heuristics)
+                    await page.mouse.down();
+                    await page.waitForTimeout(50);
+                    await page.mouse.up();
+
+                    // 3. Search for Cloudflare iframe/checkbox
+                    // Cloudflare Turnstile or old Captcha often is in an iframe
+                    const frames = page.frames();
+                    for (const frame of frames) {
+                        try {
+                            // Generic "click me" search
+                            const checkbox = await frame.$('input[type="checkbox"], label.ctp-checkbox-label, #challenge-stage div');
+                            if (checkbox) {
+                                const box = await checkbox.boundingBox();
+                                if (box) {
+                                    log.info('Found potential challenge checkbox/div. Clicking...');
+                                    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+                                    await page.mouse.down();
+                                    await page.waitForTimeout(50 + Math.random() * 100);
+                                    await page.mouse.up();
+                                }
+                            }
+                        } catch (err) {
+                            // Ignore frame access errors
+                        }
+                    }
+
+                    // Check if passed
+                    const newTitle = await page.title();
+                    if (!newTitle.includes('Just a moment') && !newTitle.includes('Attention Required')) {
+                        log.info('Challenge appeared to resolve.');
+                        break;
+                    }
+                }
             }
         } catch (e) {
             log.warning(`Wait load state warning: ${e.message}`);
