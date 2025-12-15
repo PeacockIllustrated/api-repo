@@ -41,6 +41,12 @@ const crawler = new PlaywrightCrawler({
     useSessionPool: true,
     persistCookiesPerSession: false, // DISABLE this to avoid carrying over "blocked" cookies
 
+    // IMPORTANT: Cloudflare often returns 403 for challenges. 
+    // We must tell Crawlee NOT to treat 403 as a failure so we can handle it in the requestHandler.
+    sessionPoolOptions: {
+        blockedStatusCodes: [],
+    },
+
     // Cloudflare handling: Use headful mode with xvfb
     launchContext: {
         launchOptions: {
