@@ -1,79 +1,82 @@
 {
-    "title": "ArrestWatch Florida Scraper Input",
+    "title": "ArrestWatch Scraper",
     "type": "object",
     "schemaVersion": 1,
     "properties": {
+        "dataSource": {
+            "title": "Data Source",
+            "type": "string",
+            "description": "Select the data source to scrape.",
+            "editor": "select",
+            "default": "florida.arrests.org",
+            "enum": [
+                "florida.arrests.org",
+                "miami-dade-arcgis"
+            ]
+        },
+        "arcgisUrl": {
+            "title": "ArcGIS FeatureServer URL (Miami-Dade)",
+            "type": "string",
+            "description": "Full URL to the FeatureServer/0 endpoint. Required if Source is miami-dade-arcgis.",
+            "editor": "textfield"
+        },
         "county": {
-            "title": "County ID",
+            "title": "County ID (Florida Only)",
             "type": "integer",
-            "description": "Numeric ID of the county to scrape (e.g., 8 for the default example).",
+            "description": "The county ID to scrape (e.g., 8 for Brevard).",
             "default": 8,
             "minimum": 1
         },
-        "resultsPerPage": {
-            "title": "Results Per Page",
-            "type": "integer",
-            "description": "Number of results to show per page.",
-            "default": 56,
-            "minimum": 1
-        },
         "pageStart": {
-            "title": "Start Page",
+            "title": "Start Page (Florida Only)",
             "type": "integer",
             "description": "Page number to start scraping from.",
             "default": 1,
             "minimum": 1
         },
         "pageEnd": {
-            "title": "End Page",
+            "title": "End Page (Florida Only)",
             "type": "integer",
-            "description": "Page number to stop scraping at. If null, scrapes until no results are found.",
+            "description": "Page number to stop scraping at (inclusive). Leave empty to scrape all available pages.",
             "nullable": true
-        },
-        "includeDetailPages": {
-            "title": "Include Detail Pages",
-            "type": "boolean",
-            "description": "If true, the crawler will visit each arrest's detail page for more information.",
-            "default": false
         },
         "maxConcurrency": {
             "title": "Max Concurrency",
             "type": "integer",
             "description": "Maximum number of pages processed in parallel.",
             "default": 3,
-            "minimum": 1
+            "minimum": 1,
+            "maximum": 5
         },
         "minDelayMs": {
-            "title": "Minimum Delay (ms)",
+            "title": "Min Delay (ms)",
             "type": "integer",
-            "description": "Minimum delay between requests in milliseconds to avoid rate limiting.",
+            "description": "Minimum delay in milliseconds between requests to reduce rate limiting.",
             "default": 750,
-            "minimum": 100
+            "minimum": 0
         },
         "emitWebhook": {
             "title": "Emit Webhook",
             "type": "boolean",
-            "description": "If true, sends batch results to the specified webhook URL.",
+            "description": "If true, sends the scraped data to the configured Webhook URL.",
             "default": false
         },
         "webhookUrl": {
             "title": "Webhook URL",
             "type": "string",
-            "description": "The URL to send output data to via POST.",
-            "nullable": true,
-            "editor": "textfield"
+            "description": "The URL to send the scraped data to.",
+            "editor": "textfield",
+            "nullable": true
         },
         "webhookAuthToken": {
             "title": "Webhook Auth Token",
             "type": "string",
-            "description": "Bearer token for webhook authorization.",
-            "nullable": true,
-            "isSecret": true,
-            "editor": "textfield"
+            "description": "Optional Bearer token for webhook authentication.",
+            "editor": "textfield",
+            "nullable": true
         }
     },
     "required": [
-        "county",
-        "pageStart"
+        "dataSource"
     ]
 }
