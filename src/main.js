@@ -56,35 +56,25 @@ const crawler = new PlaywrightCrawler({
     },
     requestHandlerTimeoutSecs: 180, // Give more time for challenges to resolve
 
-    requestHandler: async ({ page, request, log, enqueueLinks }) => {
+    requestHandler: async ({ page, request, log, enqueueLinks, requestQueue }) => {
         // Manual rate limiting
         await new Promise(resolve => setTimeout(resolve, minDelayMs));
 
         log.info(`Processing ${request.url}`);
 
-        // Best-effort wait for network idle
+        // Wait for Cloudflare challenge to potentially pass
+        // Random wait to mimic human behavior if challenged
         try {
-            await page.waitForLoadState('networkidle', { timeout: 15000 });
+            await page.waitForLoadState('networkidle', { timeout: 30000 });
+
+            // basic check for cloudflare title
+            const title = await page.title();
+            if (title.includes('Just a moment') || title.includes('Attention Required')) {
+                log.warning('Cloudflare challenge detected. Waiting...');
+                await page.waitForTimeout(5000 + Math.random() * 5000);
+            }
         } catch (e) {
-            log.debug('Network idle timeout, proceeding...');
-        }
-
-        // Wait for specific content indicators (strictly arrest related)
-        try {
-            // Wait for text that appears in cards
-            await page.waitForSelector('text=/Arrested|Charges|Booking|Bond/i', { timeout: 15000 });
-        } catch (e) {
-            log.info('Content text selector wait timed out, proceeding to check content...');
-        }
-
-        // Small buffer for rendering
-        await page.waitForTimeout(2000);
-
-        // Check for Cloudflare title
-        const title = await page.title();
-        if (title.includes('Just a moment') || title.includes('Attention Required')) {
-            log.warning('Cloudflare challenge detected. Waiting...');
-            await page.waitForTimeout(10000 + Math.random() * 10000);
+            log.warning(`Wait load state warning: ${e.message}`);
         }
 
         const isListing = request.userData.type === 'listing';
@@ -247,8 +237,8 @@ const crawler = new PlaywrightCrawler({
                 const nextPage = current + 1;
                 const nextUrl = `https://florida.arrests.org/index.php?county=${county}&page=${nextPage}&results=${resultsPerPage}`;
                 log.info(`Enqueuing page ${nextPage}`);
-                await enqueueLinks({
-                    urls: [nextUrl],
+                await requestQueue.addRequest({
+                    url: nextUrl,
                     userData: { type: 'listing', page: nextPage }
                 });
             }
