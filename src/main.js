@@ -33,10 +33,13 @@ const OUTPUT_FILE = 'OUTPUT.jsonl';
 
 log.info(`Starting ArrestWatch Florida Scraper`, { county, pageStart, pageEnd });
 
+const proxyConfiguration = await Actor.createProxyConfiguration();
+
 const crawler = new PlaywrightCrawler({
+    proxyConfiguration,
     maxConcurrency: maxConcurrency,
     useSessionPool: true,
-    persistCookiesPerSession: true,
+    persistCookiesPerSession: false, // DISABLE this to avoid carrying over "blocked" cookies
 
     // Cloudflare handling: Use headful mode with xvfb
     launchContext: {
@@ -56,7 +59,7 @@ const crawler = new PlaywrightCrawler({
     },
     requestHandlerTimeoutSecs: 180, // Give more time for challenges to resolve
 
-    requestHandler: async ({ page, request, log, enqueueLinks, requestQueue }) => {
+    requestHandler: async ({ page, request, log, enqueueLinks, requestQueue, session }) => {
         // Manual rate limiting
         await new Promise(resolve => setTimeout(resolve, minDelayMs));
 
@@ -80,6 +83,16 @@ const crawler = new PlaywrightCrawler({
         const isListing = request.userData.type === 'listing';
 
         if (isListing) {
+            // Check if we are still on a Cloudflare page
+            const title = await page.title();
+            const content = await page.content();
+
+            if (title.includes('Just a moment') || title.includes('Attention Required') || content.includes('challenge-platform')) {
+                log.error('Request blocked by Cloudflare (Challenge persists). Retiring session.');
+                session.retire(); // Mark this IP/Session as bad
+                throw new Error('Blocked by Cloudflare - Retrying with new session'); // Force retry
+            }
+
             // Extract listing data
 
             // Selector strategy: 
@@ -208,6 +221,15 @@ const crawler = new PlaywrightCrawler({
                     log.info(`Saved debug credentials to Key-Value Store (debug_screenshot_${request.userData.page}.png)`);
                 } catch (err) {
                     log.error(`Failed to save debug info: ${err.message}`);
+                }
+
+                // If we found NO records, it is LIKELY we are blocked or the layout changed.
+                // We should probably throw to retry with a new session, to be safe.
+                // UNLESS it is genuinely empty. But arrests.org usually has data.
+                if (extractedCount === 0) { // extractedCount is 0 here
+                    // Double check against 'Just a moment' just in case logic above missed it
+                    session.retire();
+                    throw new Error('No records found - likely blocked or layout mismatch. Retrying.');
                 }
 
             } else {
