@@ -65,13 +65,21 @@ const crawler = new PlaywrightCrawler({
         // Wait for Cloudflare challenge to potentially pass
         // Random wait to mimic human behavior if challenged
         try {
-            await page.waitForLoadState('networkidle', { timeout: 30000 });
+            await page.waitForLoadState('domcontentloaded', { timeout: 60000 });
+
+            // Wait for potential content to load
+            try {
+                // Wait for either the profile cards or the cloudflare challenge
+                await page.waitForSelector('.profile-card, .search-result, .tile, div img, #challenge-form', { timeout: 15000 });
+            } catch (e) {
+                log.info('Explicit selector wait timed out, proceeding to check content...');
+            }
 
             // basic check for cloudflare title
             const title = await page.title();
             if (title.includes('Just a moment') || title.includes('Attention Required')) {
                 log.warning('Cloudflare challenge detected. Waiting...');
-                await page.waitForTimeout(5000 + Math.random() * 5000);
+                await page.waitForTimeout(10000 + Math.random() * 10000);
             }
         } catch (e) {
             log.warning(`Wait load state warning: ${e.message}`);
