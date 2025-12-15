@@ -47,7 +47,7 @@ const crawler = new PlaywrightCrawler({
         },
     },
 
-    requestHandler: async ({ page, request, log, enqueueLinks }) => {
+    requestHandler: async ({ page, request, log, enqueueLinks, requestQueue }) => {
         // Manual rate limiting
         await new Promise(resolve => setTimeout(resolve, minDelayMs));
 
@@ -218,7 +218,7 @@ const crawler = new PlaywrightCrawler({
                 const nextPage = current + 1;
                 const nextUrl = `https://florida.arrests.org/index.php?county=${county}&page=${nextPage}&results=${resultsPerPage}`;
                 log.info(`Enqueuing page ${nextPage}`);
-                await crawler.requestQueue.addRequest({
+                await requestQueue.addRequest({
                     url: nextUrl,
                     userData: { type: 'listing', page: nextPage }
                 });
@@ -230,12 +230,12 @@ const crawler = new PlaywrightCrawler({
 
 // Initial Request
 const startUrl = `https://florida.arrests.org/index.php?county=${county}&page=${pageStart}&results=${resultsPerPage}`;
-await crawler.requestQueue.addRequest({
+log.info(`Queueing initial url: ${startUrl}`);
+
+await crawler.run([{
     url: startUrl,
     userData: { type: 'listing', page: pageStart }
-});
-
-await crawler.run();
+}]);
 
 // Post-processing: Upload JSONL to KV store
 if (fs.existsSync(OUTPUT_FILE)) {
