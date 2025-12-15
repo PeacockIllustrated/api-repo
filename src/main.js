@@ -56,7 +56,7 @@ const crawler = new PlaywrightCrawler({
     },
     requestHandlerTimeoutSecs: 180, // Give more time for challenges to resolve
 
-    requestHandler: async ({ page, request, log, enqueueLinks, requestQueue }) => {
+    requestHandler: async ({ page, request, log, enqueueLinks }) => {
         // Manual rate limiting
         await new Promise(resolve => setTimeout(resolve, minDelayMs));
 
@@ -237,8 +237,8 @@ const crawler = new PlaywrightCrawler({
                 const nextPage = current + 1;
                 const nextUrl = `https://florida.arrests.org/index.php?county=${county}&page=${nextPage}&results=${resultsPerPage}`;
                 log.info(`Enqueuing page ${nextPage}`);
-                await requestQueue.addRequest({
-                    url: nextUrl,
+                await enqueueLinks({
+                    urls: [nextUrl],
                     userData: { type: 'listing', page: nextPage }
                 });
             }
