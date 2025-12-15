@@ -62,27 +62,29 @@ const crawler = new PlaywrightCrawler({
 
         log.info(`Processing ${request.url}`);
 
-        // Wait for Cloudflare challenge to potentially pass
-        // Random wait to mimic human behavior if challenged
+        // Best-effort wait for network idle
         try {
-            await page.waitForLoadState('domcontentloaded', { timeout: 60000 });
-
-            // Wait for potential content to load
-            try {
-                // Wait for either the profile cards or the cloudflare challenge
-                await page.waitForSelector('.profile-card, .search-result, .tile, div img, #challenge-form', { timeout: 15000 });
-            } catch (e) {
-                log.info('Explicit selector wait timed out, proceeding to check content...');
-            }
-
-            // basic check for cloudflare title
-            const title = await page.title();
-            if (title.includes('Just a moment') || title.includes('Attention Required')) {
-                log.warning('Cloudflare challenge detected. Waiting...');
-                await page.waitForTimeout(10000 + Math.random() * 10000);
-            }
+            await page.waitForLoadState('networkidle', { timeout: 15000 });
         } catch (e) {
-            log.warning(`Wait load state warning: ${e.message}`);
+            log.debug('Network idle timeout, proceeding...');
+        }
+
+        // Wait for specific content indicators (strictly arrest related)
+        try {
+            // Wait for text that appears in cards
+            await page.waitForSelector('text=/Arrested|Charges|Booking|Bond/i', { timeout: 15000 });
+        } catch (e) {
+            log.info('Content text selector wait timed out, proceeding to check content...');
+        }
+
+        // Small buffer for rendering
+        await page.waitForTimeout(2000);
+
+        // Check for Cloudflare title
+        const title = await page.title();
+        if (title.includes('Just a moment') || title.includes('Attention Required')) {
+            log.warning('Cloudflare challenge detected. Waiting...');
+            await page.waitForTimeout(10000 + Math.random() * 10000);
         }
 
         const isListing = request.userData.type === 'listing';
