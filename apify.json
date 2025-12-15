@@ -1,0 +1,9 @@
+{
+    "name": "arrest-watch-florida",
+    "version": "0.0.1",
+    "buildTag": "latest",
+    "dockerfile": "./Dockerfile",
+    "env": {
+        "npm_config_loglevel": "silent"
+    }
+}
