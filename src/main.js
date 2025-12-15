@@ -34,11 +34,10 @@ const OUTPUT_FILE = 'OUTPUT.jsonl';
 log.info(`Starting ArrestWatch Florida Scraper`, { county, pageStart, pageEnd });
 
 const crawler = new PlaywrightCrawler({
-    minRequestDelayMillis: minDelayMs,
     maxConcurrency: maxConcurrency,
     useSessionPool: true,
     persistCookiesPerSession: true,
-    
+
     // Cloudflare handling: heavy browsing, headless sometimes blocked, but we'll try headless: true first
     // as per user instructions to use "headless browsing".
     launchContext: {
@@ -49,13 +48,16 @@ const crawler = new PlaywrightCrawler({
     },
 
     requestHandler: async ({ page, request, log, enqueueLinks }) => {
+        // Manual rate limiting
+        await new Promise(resolve => setTimeout(resolve, minDelayMs));
+
         log.info(`Processing ${request.url}`);
 
         // Wait for Cloudflare challenge to potentially pass
         // Random wait to mimic human behavior if challenged
         try {
             await page.waitForLoadState('networkidle', { timeout: 30000 });
-            
+
             // basic check for cloudflare title
             const title = await page.title();
             if (title.includes('Just a moment') || title.includes('Attention Required')) {
@@ -70,33 +72,33 @@ const crawler = new PlaywrightCrawler({
 
         if (isListing) {
             // Extract listing data
-            
+
             // Selector strategy: 
             // The site usually lists arrests in a grid or list. 
             // We look for elements that contain "Arrested" or standard profile classes.
             // Since we couldn't inspect, we will try standard generic selectors for this specific arrests.org template.
             // arrests.org usually uses 'div.profile-card' or similar containers inside a main wrapper.
             // We'll select all divs and filter for those that look like entries.
-            
+
             // Let's grab specific containers. 
             // A common structure for florida.arrests.org is:
             // .content list -> .row -> .col or generic divs.
             // We will look for elements matching the "arrest-card" pattern.
             // Actually, based on public knowledge of arrests.org, they often use tile-like divs.
-            
-            const arrestCards = await page.$$('.profile-card, .search-result, .tile'); 
+
+            const arrestCards = await page.$$('.profile-card, .search-result, .tile');
             // Fallback: try to identify by structure if class names are obfuscated.
-            
+
             let extractedCount = 0;
             const records = [];
 
             // If we found specific classes
             if (arrestCards.length > 0) {
-                 // implement extraction wrapper
-                 for (const card of arrestCards) {
-                     // Extract details
-                     // This part is speculative without the DOM, but I will make it robust to "missing fields"
-                 }
+                // implement extraction wrapper
+                for (const card of arrestCards) {
+                    // Extract details
+                    // This part is speculative without the DOM, but I will make it robust to "missing fields"
+                }
             } else {
                 // FALLBACK: Iterate over all <a> tags that have an image inside, which is common for mugshots
                 const possibleCards = await page.$$eval('div', divs => {
@@ -105,9 +107,9 @@ const crawler = new PlaywrightCrawler({
                         const img = div.querySelector('img');
                         const text = div.innerText;
                         // minimal validation
-                        if (img && text && text.includes('Arrested')) return { 
-                            valid: true, 
-                            html: div.outerHTML, 
+                        if (img && text && text.includes('Arrested')) return {
+                            valid: true,
+                            html: div.outerHTML,
                             text: div.innerText,
                             imgSrc: img.src,
                             href: div.querySelector('a')?.href
@@ -115,19 +117,19 @@ const crawler = new PlaywrightCrawler({
                         return { valid: false };
                     }).filter(d => d.valid);
                 });
-                
+
                 // We'll process these possible cards
                 for (const card of possibleCards) {
-                     const record = parseCard(card, county);
-                     if (record) records.push(record);
+                    const record = parseCard(card, county);
+                    if (record) records.push(record);
                 }
             }
-            
+
             // TRY TO FIND SPECIFIC SELECTORS (Since I cannot see them, I will provide a generic parser)
             // But the User asked me to "Create a robust... actor".
             // I will use a very generic "container" strategy.
             // Search for the main content area.
-            
+
             // Let's use a Page function to extract validation.
             const pageData = await page.evaluate((currentCounty) => {
                 const results = [];
@@ -140,25 +142,25 @@ const crawler = new PlaywrightCrawler({
                     // 1. Has an Image (mugshot)
                     // 2. Has a Name (First Last)
                     // 3. Has "Arrested" or Date.
-                    
+
                     const img = div.querySelector('img');
                     if (!img) continue;
-                    
+
                     const text = div.innerText;
                     if (!text.match(/\d{4}/)) continue; // Must have some date-like string or number
                     if (text.length > 500) continue; // Too big to be a card
-                    
+
                     // Valid candidate
                     const nameMatch = text.match(/^([A-Z\s]+)/); // Rough extraction request
                     const name = div.querySelector('.title, h4, strong')?.innerText || (nameMatch ? nameMatch[1] : 'Unknown');
-                    
+
                     const timestampRaw = text.match(/Arrested:?\s*(.*)/i)?.[1] || text.match(/\d{1,2}\/\d{1,2}\/\d{4}/)?.[0] || '';
-                    
+
                     // Charges often list items
                     const charges = Array.from(div.querySelectorAll('li, .charge')).map(c => c.innerText);
-                    
+
                     const detailLink = div.querySelector('a')?.href;
-                    
+
                     results.push({
                         county_id: currentCounty,
                         person_name: name.trim(),
@@ -171,7 +173,7 @@ const crawler = new PlaywrightCrawler({
                         scraped_at: new Date().toISOString()
                     });
                 }
-                
+
                 // Deduplicate based on detail_url or name
                 const unique = [];
                 const seen = new Set();
@@ -184,7 +186,7 @@ const crawler = new PlaywrightCrawler({
                 }
                 return unique;
             }, county);
-            
+
             if (pageData.length === 0) {
                 log.warning('No records found on this page. Stopping or blocked.');
                 // snapshot for debug
@@ -192,7 +194,7 @@ const crawler = new PlaywrightCrawler({
             } else {
                 log.info(`Found ${pageData.length} records.`);
                 extractedCount = pageData.length;
-                
+
                 for (const record of pageData) {
                     const fullRecord = {
                         source: "florida.arrests.org",
@@ -201,14 +203,14 @@ const crawler = new PlaywrightCrawler({
                         county_name: "Unknown", // extraction todo
                         ...record
                     };
-                    
+
                     await Actor.pushData(fullRecord);
-                    
+
                     // Append to JSONL
                     fs.appendFileSync(OUTPUT_FILE, JSON.stringify(fullRecord) + '\n');
                 }
             }
-            
+
             // Pagination Logic
             // If we found results AND (no pageEnd OR current < pageEnd)
             const current = request.userData.page;
@@ -221,7 +223,7 @@ const crawler = new PlaywrightCrawler({
                     userData: { type: 'listing', page: nextPage }
                 });
             }
-            
+
         }
     },
 });
@@ -247,7 +249,7 @@ if (emitWebhook && webhookUrl) {
     // In a real scenario, we might batch this during the crawl, but for now we send a completion signal or the data
     const dataset = await Actor.openDataset();
     const { items } = await dataset.getData();
-    
+
     try {
         await fetch(webhookUrl, {
             method: 'POST',
