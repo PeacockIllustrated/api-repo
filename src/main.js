@@ -38,14 +38,23 @@ const crawler = new PlaywrightCrawler({
     useSessionPool: true,
     persistCookiesPerSession: true,
 
-    // Cloudflare handling: heavy browsing, headless sometimes blocked, but we'll try headless: true first
-    // as per user instructions to use "headless browsing".
+    // Cloudflare handling: Use headful mode with xvfb
     launchContext: {
         launchOptions: {
-            headless: true,
-            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-blink-features=AutomationControlled'],
+            headless: false, // Run headful (uses xvfb in Docker) to reduce bot score
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-blink-features=AutomationControlled',
+                '--start-maximized'
+            ],
+            viewport: { width: 1920, height: 1080 }
         },
     },
+    browserPoolOptions: {
+        useFingerprints: true,
+    },
+    requestHandlerTimeoutSecs: 180, // Give more time for challenges to resolve
 
     requestHandler: async ({ page, request, log, enqueueLinks, requestQueue }) => {
         // Manual rate limiting
@@ -189,8 +198,18 @@ const crawler = new PlaywrightCrawler({
 
             if (pageData.length === 0) {
                 log.warning('No records found on this page. Stopping or blocked.');
-                // snapshot for debug
-                // await page.screenshot({ path: `debug_${request.userData.page}.png` });
+
+                // Screenshot for debugging
+                try {
+                    const buffer = await page.screenshot({ fullPage: true });
+                    await Actor.setValue(`debug_screenshot_${request.userData.page}.png`, buffer, { contentType: 'image/png' });
+                    const html = await page.content();
+                    await Actor.setValue(`debug_html_${request.userData.page}.html`, html, { contentType: 'text/html' });
+                    log.info(`Saved debug credentials to Key-Value Store (debug_screenshot_${request.userData.page}.png)`);
+                } catch (err) {
+                    log.error(`Failed to save debug info: ${err.message}`);
+                }
+
             } else {
                 log.info(`Found ${pageData.length} records.`);
                 extractedCount = pageData.length;
