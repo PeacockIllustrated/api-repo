@@ -60,14 +60,16 @@
             "title": "Webhook URL",
             "type": "string",
             "description": "The URL to send output data to via POST.",
-            "nullable": true
+            "nullable": true,
+            "editor": "textfield"
         },
         "webhookAuthToken": {
             "title": "Webhook Auth Token",
             "type": "string",
             "description": "Bearer token for webhook authorization.",
             "nullable": true,
-            "isSecret": true
+            "isSecret": true,
+            "editor": "textfield"
         }
     },
     "required": [
